@@ -143,17 +143,22 @@ func getCode(cfg *config.Config, columns []Column) (code string, err error) {
 	// TODO: 封装成函数  生成操作SQL
 	selectSQL := fmt.Sprintf("var Select%sSQL = \"SELECT * FROM `%%v` WHERE ", structName)
 	deleteSQL := fmt.Sprintf("var Delete%sSQL = \"DELETE FROM `%%v` WHERE ", structName)
-	if cfg.SelectKey != "" {
-		selectSQL += fmt.Sprintf("`%s`='%%v'\"\n\n", cfg.SelectKey)
-		deleteSQL += fmt.Sprintf("`%s`='%%v'\"\n\n", cfg.SelectKey)
+	if cfg.SelectKeys != "" {
+		keys := strings.Split(cfg.SelectKeys, ",")
+		for _, key := range keys {
+			if key != "" {
+				selectSQL += fmt.Sprintf("`%s`='%%v' AND ", key)
+				deleteSQL += fmt.Sprintf("`%s`='%%v' AND ", key)
+			}
+		}
 	} else {
 		for _, pk := range pkVec {
 			selectSQL += fmt.Sprintf("`%s`='%%v' AND ", pk)
 			deleteSQL += fmt.Sprintf("`%s`='%%v' AND ", pk)
 		}
-		selectSQL = strings.TrimSuffix(selectSQL, " AND ")
-		deleteSQL = strings.TrimSuffix(deleteSQL, " AND ")
 	}
+	selectSQL = strings.TrimSuffix(selectSQL, " AND ")
+	deleteSQL = strings.TrimSuffix(deleteSQL, " AND ")
 
 	code += fmt.Sprintf("// Select%sSQL select SQL for %s\n", structName, structName)
 	code += fmt.Sprintf("%s\"\n\n", selectSQL)

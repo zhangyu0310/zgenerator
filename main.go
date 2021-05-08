@@ -26,7 +26,7 @@ var (
 	packageName         = flag.String("package-name", "handler", "package name of generate code")
 	jsonTag             = flag.Bool("json-tag", false, "Add json tag")
 	dateString          = flag.Bool("date-string", true, "Use string store date type")
-	selectKey           = flag.String("select-key", "", "Key of select SQL (Default: PrimaryKey)")
+	selectKeys          = flag.String("select-keys", "", "Key of select SQL (Use delimiter ',' | Default: PrimaryKey)")
 	customizeCodeBefore = flag.String("code-before-struct", "", "Customize code before struct")
 	customizeCodeIn     = flag.String("code-in-struct", "", "Customize code in struct")
 	customizeCodeAfter  = flag.String("code-after-struct", "", "Customize code after struct")
@@ -74,7 +74,7 @@ func cmdConfigSetToGlobal(cfg *config.Config) {
 	cfg.PackageName = *packageName
 	cfg.JsonTag = *jsonTag
 	cfg.DateString = *dateString
-	cfg.SelectKey = *selectKey
+	cfg.SelectKeys = *selectKeys
 	cfg.CustomizeCodeBefore = *customizeCodeBefore
 	cfg.CustomizeCodeIn = *customizeCodeIn
 	cfg.CustomizeCodeAfter = *customizeCodeAfter

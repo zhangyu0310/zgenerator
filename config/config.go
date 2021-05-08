@@ -11,7 +11,7 @@ type Config struct {
 	PackageName         string
 	JsonTag             bool
 	DateString          bool
-	SelectKey           string
+	SelectKeys          string
 	CustomizeCodeBefore string
 	CustomizeCodeIn     string
 	CustomizeCodeAfter  string
