@@ -12,47 +12,53 @@ type TestTable struct {
 	Money sql.NullInt64  `db:"Money"` // Money
 }
 
-// SelectTestTable select SQL for TestTable
-var SelectTestTable = "SELECT * FROM %v WHERE ID=%v"
+// SelectTestTableSQL select SQL for TestTable
+var SelectTestTableSQL = "SELECT * FROM `%v` WHERE `ID`='%v'"
 
-// InsertTestTable insert SQL for TestTable
-var InsertTestTable = "INSERT INTO %s (Name, Money) VALUES (:Name, :Money) ON DUPLICATE KEY UPDATE Name=:Name, Money=:Money"
+// InsertTestTableSQL insert SQL for TestTable
+var InsertTestTableSQL = "INSERT INTO `%v` (`Name`, `Money`) VALUES (:Name, :Money) ON DUPLICATE KEY UPDATE `Name`=:Name, `Money`=:Money"
 
-// DeleteTestTable delete SQL for TestTable
-var DeleteTestTable = "DELETE FROM %v WHERE ID=%v"
+// DeleteTestTableSQL delete SQL for TestTable
+var DeleteTestTableSQL = "DELETE FROM `%v` WHERE `ID`='%v'"
 
-// TableName table name from user input.
-var TableName = "TestTable"
+// TestTableTableName table name from user input.
+var TestTableTableName = "TestTable"
 
-func Select(db *sqlx.DB, dest *[]TestTable, keys ...interface{}) error {
-	return SelectWithTableName(db, dest, TableName, keys)
+// SelectTestTable use SelectTestTableSQL select table TestTable
+func SelectTestTable(db *sqlx.DB, dest *[]TestTable, keys ...interface{}) error {
+	return SelectTestTableWithTableName(db, dest, TestTableTableName, keys)
 }
 
-func SelectWithTableName(db *sqlx.DB, dest *[]TestTable, tableName string, keys ...interface{}) error {
+// SelectTestTableWithTableName use SelectTestTableSQL select table 'tableName'
+func SelectTestTableWithTableName(db *sqlx.DB, dest *[]TestTable, tableName string, keys ...interface{}) error {
 	var tmpKeys []interface{}
 	tmpKeys = append(tmpKeys, tableName)
 	tmpKeys = append(tmpKeys, keys...)
-	sqlStr := fmt.Sprintf(SelectTestTable, tmpKeys...)
+	sqlStr := fmt.Sprintf(SelectTestTableSQL, tmpKeys...)
 	return db.Select(dest, sqlStr)
 }
 
-func Insert(db *sqlx.DB, src TestTable) (sql.Result, error) {
-	return InsertWithTableName(db, TableName, src)
+// InsertTestTable use InsertTestTableSQL insert table TestTable
+func InsertTestTable(db *sqlx.DB, src TestTable) (sql.Result, error) {
+	return InsertTestTableWithTableName(db, TestTableTableName, src)
 }
 
-func InsertWithTableName(db *sqlx.DB, tableName string, src TestTable) (sql.Result, error) {
-	sqlStr := fmt.Sprintf(InsertTestTable, tableName)
+// InsertTestTableWithTableName use InsertTestTableSQL insert table 'tableName'
+func InsertTestTableWithTableName(db *sqlx.DB, tableName string, src TestTable) (sql.Result, error) {
+	sqlStr := fmt.Sprintf(InsertTestTableSQL, tableName)
 	return db.NamedExec(sqlStr, src)
 }
 
-func Delete(db *sqlx.DB, keys ...interface{}) (sql.Result, error) {
-	return DeleteWithTableName(db, TableName, keys)
+// DeleteTestTable use DeleteTestTableSQL delete table TestTable
+func DeleteTestTable(db *sqlx.DB, keys ...interface{}) (sql.Result, error) {
+	return DeleteTestTableWithTableName(db, TestTableTableName, keys)
 }
 
-func DeleteWithTableName(db *sqlx.DB, tableName string, keys ...interface{}) (sql.Result, error) {
+// DeleteTestTableWithTableName use DeleteTestTableSQL delete table 'tableName'
+func DeleteTestTableWithTableName(db *sqlx.DB, tableName string, keys ...interface{}) (sql.Result, error) {
 	var tmpKeys []interface{}
 	tmpKeys = append(tmpKeys, tableName)
 	tmpKeys = append(tmpKeys, keys...)
-	sqlStr := fmt.Sprintf(DeleteTestTable, tmpKeys...)
+	sqlStr := fmt.Sprintf(DeleteTestTableSQL, tmpKeys...)
 	return db.Exec(sqlStr)
 }

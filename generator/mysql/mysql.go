@@ -75,7 +75,7 @@ func getCode(cfg *config.Config, columns []Column) (code string, err error) {
 
 	// Loop processing columns
 	//TODO: 封装成函数    生成struct
-	insertSQL1 := fmt.Sprintf("var Insert%s = \"INSERT INTO %%s (", structName)
+	insertSQL1 := fmt.Sprintf("var Insert%sSQL = \"INSERT INTO `%%v` (", structName)
 	insertSQL2 := ") VALUES ("
 	insertSQL3 := ") ON DUPLICATE KEY UPDATE "
 	var pkVec []string
@@ -87,6 +87,15 @@ func getCode(cfg *config.Config, columns []Column) (code string, err error) {
 		}
 		if column.IsNullAble == "YES" {
 			goType = GetNullAbleType(goType)
+		} else {
+			if strings.Contains(strings.ToLower(column.ColumnType), "unsigned") {
+				tmpType := column.DataType + " unsigned"
+				goType, ok = TypesMapping[tmpType]
+				if !ok {
+					err = errors.New("not support mysql type " + tmpType)
+					return
+				}
+			}
 		}
 		columnName := column.ColumnName
 		if cfg.FirstToUpper {
@@ -105,7 +114,7 @@ func getCode(cfg *config.Config, columns []Column) (code string, err error) {
 		code += "\n"
 
 		if strings.ToUpper(column.Extra) != "AUTO_INCREMENT" {
-			insertSQL1 += fmt.Sprintf("%s, ", column.ColumnName)
+			insertSQL1 += fmt.Sprintf("`%s`, ", column.ColumnName)
 			insertSQL2 += fmt.Sprintf(":%s, ", columnName)
 		}
 		if column.ColumnKey == "PRI" || column.ColumnKey == "UNI" {
@@ -114,7 +123,7 @@ func getCode(cfg *config.Config, columns []Column) (code string, err error) {
 			}
 		} else {
 			if strings.ToUpper(column.Extra) != "AUTO_INCREMENT" {
-				insertSQL3 += fmt.Sprintf("%s=:%s, ", column.ColumnName, columnName)
+				insertSQL3 += fmt.Sprintf("`%s`=:%s, ", column.ColumnName, columnName)
 			}
 		}
 	}
@@ -132,47 +141,58 @@ func getCode(cfg *config.Config, columns []Column) (code string, err error) {
 	}
 
 	// TODO: 封装成函数  生成操作SQL
-	selectSQL := fmt.Sprintf("var Select%s = \"SELECT * FROM %%v WHERE ", structName)
-	deleteSQL := fmt.Sprintf("var Delete%s = \"DELETE FROM %%v WHERE ", structName)
+	selectSQL := fmt.Sprintf("var Select%sSQL = \"SELECT * FROM `%%v` WHERE ", structName)
+	deleteSQL := fmt.Sprintf("var Delete%sSQL = \"DELETE FROM `%%v` WHERE ", structName)
 	if cfg.SelectKey != "" {
-		selectSQL += fmt.Sprintf("%s=%%v\"\n\n", cfg.SelectKey)
-		deleteSQL += fmt.Sprintf("%s=%%v\"\n\n", cfg.SelectKey)
+		selectSQL += fmt.Sprintf("`%s`='%%v'\"\n\n", cfg.SelectKey)
+		deleteSQL += fmt.Sprintf("`%s`='%%v'\"\n\n", cfg.SelectKey)
 	} else {
 		for _, pk := range pkVec {
-			selectSQL += fmt.Sprintf("%s=%%v AND ", pk)
-			deleteSQL += fmt.Sprintf("%s=%%v AND ", pk)
+			selectSQL += fmt.Sprintf("`%s`='%%v' AND ", pk)
+			deleteSQL += fmt.Sprintf("`%s`='%%v' AND ", pk)
 		}
 		selectSQL = strings.TrimSuffix(selectSQL, " AND ")
 		deleteSQL = strings.TrimSuffix(deleteSQL, " AND ")
 	}
 
-	code += fmt.Sprintf("// Select%s select SQL for %s\n", structName, structName)
+	code += fmt.Sprintf("// Select%sSQL select SQL for %s\n", structName, structName)
 	code += fmt.Sprintf("%s\"\n\n", selectSQL)
-	code += fmt.Sprintf("// Insert%s insert SQL for %s\n", structName, structName)
+	code += fmt.Sprintf("// Insert%sSQL insert SQL for %s\n", structName, structName)
 	code += fmt.Sprintf("%s\"\n\n", insertSQL)
-	code += fmt.Sprintf("// Delete%s delete SQL for %s\n", structName, structName)
+	code += fmt.Sprintf("// Delete%sSQL delete SQL for %s\n", structName, structName)
 	code += fmt.Sprintf("%s\"\n\n", deleteSQL)
 
-	code += "// TableName table name from user input.\n"
-	code += fmt.Sprintf("var TableName = \"%s\"\n\n", cfg.TableName)
+	code += fmt.Sprintf("// %sTableName table name from user input.\n", structName)
+	code += fmt.Sprintf("var %sTableName = \"%s\"\n\n", structName, cfg.TableName)
 
 	// TODO: 封装成函数   生成操作函数
 	if cfg.GenerateFunc {
-		code += fmt.Sprintf("func Select(db *sqlx.DB, dest *[]%s, keys ...interface{}) error {\n", structName)
-		code += fmt.Sprintf("return SelectWithTableName(db, dest, TableName, keys)}\n\n")
-		code += fmt.Sprintf("func SelectWithTableName(db *sqlx.DB, dest *[]%s, tableName string, keys ...interface{}) error {\n", structName)
+		code += fmt.Sprintf("// Select%s use Select%sSQL select table %s\n", structName, structName, cfg.TableName)
+		code += fmt.Sprintf("func Select%s(db *sqlx.DB, dest *[]%s, keys ...interface{}) error {\n", structName, structName)
+		code += fmt.Sprintf("return Select%sWithTableName(db, dest, %sTableName, keys)}\n\n", structName, structName)
+
+		code += fmt.Sprintf("// Select%sWithTableName use Select%sSQL select table 'tableName'\n", structName, structName)
+		code += fmt.Sprintf("func Select%sWithTableName(db *sqlx.DB, dest *[]%s, tableName string, keys ...interface{}) error {\n", structName, structName)
 		code += fmt.Sprintf("var tmpKeys []interface{}\ntmpKeys = append(tmpKeys, tableName)\ntmpKeys = append(tmpKeys, keys...)\n")
-		code += fmt.Sprintf("sqlStr := fmt.Sprintf(Select%s, tmpKeys...)\n", structName)
+		code += fmt.Sprintf("sqlStr := fmt.Sprintf(Select%sSQL, tmpKeys...)\n", structName)
 		code += fmt.Sprintf("return db.Select(dest, sqlStr)}\n\n")
-		code += fmt.Sprintf("func Insert(db *sqlx.DB, src %s) (sql.Result, error) {\n", structName)
-		code += fmt.Sprintf("return InsertWithTableName(db, TableName, src)}\n\n")
-		code += fmt.Sprintf("func InsertWithTableName(db *sqlx.DB, tableName string, src %s) (sql.Result, error) {\n", structName)
-		code += fmt.Sprintf("sqlStr := fmt.Sprintf(Insert%s, tableName)\nreturn db.NamedExec(sqlStr, src)\n}\n\n", structName)
-		code += fmt.Sprintf("func Delete(db *sqlx.DB, keys ...interface{}) (sql.Result, error) {\n")
-		code += fmt.Sprintf("\treturn DeleteWithTableName(db, TableName, keys)\n}\n\n")
-		code += fmt.Sprintf("func DeleteWithTableName(db *sqlx.DB, tableName string, keys ...interface{}) (sql.Result, error) {\n")
+
+		code += fmt.Sprintf("// Insert%s use Insert%sSQL insert table %s\n", structName, structName, cfg.TableName)
+		code += fmt.Sprintf("func Insert%s(db *sqlx.DB, src %s) (sql.Result, error) {\n", structName, structName)
+		code += fmt.Sprintf("return Insert%sWithTableName(db, %sTableName, src)}\n\n", structName, structName)
+
+		code += fmt.Sprintf("// Insert%sWithTableName use Insert%sSQL insert table 'tableName'\n", structName, structName)
+		code += fmt.Sprintf("func Insert%sWithTableName(db *sqlx.DB, tableName string, src %s) (sql.Result, error) {\n", structName, structName)
+		code += fmt.Sprintf("sqlStr := fmt.Sprintf(Insert%sSQL, tableName)\nreturn db.NamedExec(sqlStr, src)\n}\n\n", structName)
+
+		code += fmt.Sprintf("// Delete%s use Delete%sSQL delete table %s\n", structName, structName, cfg.TableName)
+		code += fmt.Sprintf("func Delete%s(db *sqlx.DB, keys ...interface{}) (sql.Result, error) {\n", structName)
+		code += fmt.Sprintf("\treturn Delete%sWithTableName(db, %sTableName, keys)\n}\n\n", structName, structName)
+
+		code += fmt.Sprintf("// Delete%sWithTableName use Delete%sSQL delete table 'tableName'\n", structName, structName)
+		code += fmt.Sprintf("func Delete%sWithTableName(db *sqlx.DB, tableName string, keys ...interface{}) (sql.Result, error) {\n", structName)
 		code += fmt.Sprintf("var tmpKeys []interface{}\ntmpKeys = append(tmpKeys, tableName)\ntmpKeys = append(tmpKeys, keys...)\n")
-		code += fmt.Sprintf("sqlStr := fmt.Sprintf(Delete%s, tmpKeys...)\n\treturn db.Exec(sqlStr)}\n", structName)
+		code += fmt.Sprintf("sqlStr := fmt.Sprintf(Delete%sSQL, tmpKeys...)\n\treturn db.Exec(sqlStr)}\n", structName)
 	}
 	//TODO: 位置整理  如果没有使用到time.Time 类型，删除import time
 	if !cfg.DateString && !strings.Contains(code, "time.Time") {
